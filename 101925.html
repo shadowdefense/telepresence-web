@@ -5,10 +5,8 @@
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="vr" content="yes">
-<meta http-equiv="origin-trial"
-content="AluaRjL2P9hp8bTlfvWmhCfyM0rXl+JoWJ2CYo3rXzVxPZ4qRdrxF3QgxCQVnKc4I2HD8TdYZzlyd9FHDZ+eiAAAABp0eyJvcmlnaW4iOiJodHRwczovL3NoYWRvd2RlZmVuc2UuZ2l0aHViLmlvOjQ0MyIsImZlYXR1cmUiOiJXZWJYUiIsImV4cGlyeSI6MTk5OTE0MTYwMH0=">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>101925 – Quest3 Telepresence Control (Stable XR Token)</title>
+<title>101925 – Quest3 Telepresence Control (Final Stable VR Version)</title>
 
 <style>
 body{background:#000;color:#0f0;font-family:monospace;text-align:center;margin:0;overflow:hidden;}
@@ -36,12 +34,18 @@ button.active{background:#0f0;color:#000;box-shadow:0 0 15px #0f0;}
 <div id="topbar">
   <div class="controlBlock"><div class="controlLabel">Thumb Ball</div>
     <button id="thumbBtn" class="topBtn">Control OFF</button></div>
+
   <div class="controlBlock"><div class="controlLabel">Lights</div>
     <button id="lightsBtn" class="topBtn">ON / OFF</button></div>
+
+  <div class="controlBlock"><div class="controlLabel">VR Mode</div>
+    <button id="vrBtn" class="topBtn">Enter VR Mode</button></div>
+
   <div class="controlBlock"><div class="controlLabel">Test</div>
     <button id="testBtn" class="topBtn"
      style="background:linear-gradient(145deg,#222,#000);
      box-shadow:2px 2px 6px #050,inset -2px -2px 4px #0a0;">TEST</button></div>
+
   <div class="controlBlock"><div class="controlLabel">Mic</div>
     <button id="micBtn" class="topBtn">Mic OFF</button></div>
 </div>
@@ -61,18 +65,25 @@ button.active{background:#0f0;color:#000;box-shadow:0 0 15px #0f0;}
 <div id="log">Waiting for input…</div>
 
 <script>
+/* -------- Buttons & States -------- */
 const btns={up:up,down:down,left:left,right:right,stop:stop};
 const thumbBtn=document.getElementById('thumbBtn'),
       lightsBtn=document.getElementById('lightsBtn'),
       testBtn=document.getElementById('testBtn'),
       micBtn=document.getElementById('micBtn'),
+      vrBtn=document.getElementById('vrBtn'),
       warning=document.getElementById('warning');
+
+let xrSession=null,lastCmd='stop';
+
 function clearGlow(){Object.values(btns).forEach(b=>b.classList.remove('active'));}
 function glow(id){clearGlow();if(btns[id])btns[id].classList.add('active');}
 function send(cmd){
   glow(cmd==='forward'?'up':cmd==='backward'?'down':cmd==='left'?'left':cmd==='right'?'right':'stop');
   document.getElementById('log').innerText="Sent: "+cmd;
 }
+
+/* -------- Normal Input Handlers -------- */
 glow('stop');
 Object.keys(btns).forEach(k=>btns[k].onclick=()=>{send(k==='up'?'forward':
   k==='down'?'backward':k==='left'?'left':k==='right'?'right':'stop');});
@@ -89,6 +100,39 @@ micBtn.onclick=()=>{const s=micBtn.classList.toggle('active');
   micBtn.innerText=s?'Mic ON':'Mic OFF';warning.style.display=s?'block':'none';};
 thumbBtn.onclick=()=>{const s=thumbBtn.classList.toggle('active');
   thumbBtn.innerText=s?'Control ON':'Control OFF';};
+
+/* -------- VR Mode Setup -------- */
+vrBtn.onclick=async()=>{
+  if(!navigator.xr){alert("WebXR not supported in this browser.");return;}
+  if(xrSession){
+    await xrSession.end();xrSession=null;
+    vrBtn.innerText="Enter VR Mode";vrBtn.classList.remove('active');
+    document.getElementById('log').innerText="Exited VR Mode";
+    return;
+  }
+  try{
+    xrSession=await navigator.xr.requestSession('immersive-vr');
+    vrBtn.innerText="Exit VR Mode";vrBtn.classList.add('active');
+    document.getElementById('log').innerText="VR Mode active";
+    xrSession.requestAnimationFrame(onXRFrame);
+  }catch(e){alert("Failed to enter VR Mode: "+e.message);}
+};
+
+/* -------- Thumb Ball Polling in VR -------- */
+function onXRFrame(t,frame){
+  if(!xrSession)return;
+  const pads=navigator.getGamepads();
+  let cmd='stop';
+  for(const gp of pads){if(!gp)continue;
+    const x=gp.axes[0]||0,y=gp.axes[1]||0;
+    if(y<-0.4)cmd='forward';
+    else if(y>0.4)cmd='backward';
+    else if(x<-0.4)cmd='left';
+    else if(x>0.4)cmd='right';
+    break;}
+  if(cmd!==lastCmd){send(cmd);lastCmd=cmd;}
+  frame.session.requestAnimationFrame(onXRFrame);
+}
 </script>
 </body>
 </html>
