@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="vr" content="yes">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>101925 – Quest3 Telepresence Control (Final Unified Input)</title>
+<title>101925 – Quest3 Telepresence Control (Corrected Glow Version)</title>
 
 <style>
 body{background:#000;color:#0f0;font-family:monospace;text-align:center;margin:0;overflow:hidden;}
@@ -64,7 +64,16 @@ button.active{background:#0f0;color:#000;box-shadow:0 0 15px #0f0;}
 <div id="log">Waiting for input…</div>
 
 <script>
-const btns={up:up,down:down,left:left,right:right,stop:stop};
+window.addEventListener('DOMContentLoaded',()=>{
+
+/* -------- Setup -------- */
+const btns = {
+  up: document.getElementById('up'),
+  down: document.getElementById('down'),
+  left: document.getElementById('left'),
+  right: document.getElementById('right'),
+  stop: document.getElementById('stop')
+};
 const thumbBtn=document.getElementById('thumbBtn'),
       lightsBtn=document.getElementById('lightsBtn'),
       testBtn=document.getElementById('testBtn'),
@@ -84,14 +93,15 @@ function send(cmd){
 
 /* -------- Mouse & Touch Inputs -------- */
 for(const [name,btn] of Object.entries(btns)){
-  btn.onmousedown=btn.ontouchstart=()=>{btn.classList.add('active');
+  btn.onmousedown = btn.ontouchstart = (e)=>{
+    e.preventDefault();
     if(name==='up')send('forward');
     else if(name==='down')send('backward');
     else if(name==='left')send('left');
     else if(name==='right')send('right');
     else send('stop');
   };
-  btn.onmouseup=btn.ontouchend=()=>{send('stop');};
+  btn.onmouseup = btn.ontouchend = ()=>setTimeout(()=>send('stop'),50);
 }
 
 /* -------- Keyboard Inputs -------- */
@@ -103,6 +113,9 @@ document.addEventListener('keydown',e=>{
   if(e.key==='d'||e.key==='ArrowRight')send('right');
 });
 document.addEventListener('keyup',()=>send('stop'));
+window.onblur=()=>send('stop');
+
+/* -------- Default Glow -------- */
 glow('stop');
 
 /* -------- Top Buttons -------- */
@@ -126,6 +139,7 @@ vrBtn.onclick=async()=>{
     xrSession=await navigator.xr.requestSession('immersive-vr');
     vrBtn.innerText="Exit VR Mode";vrBtn.classList.add('active');
     document.getElementById('log').innerText="VR Mode active";
+    xrSession.onend=()=>{xrSession=null;vrBtn.innerText="Enter VR Mode";vrBtn.classList.remove('active');};
     xrSession.requestAnimationFrame(onXRFrame);
   }catch(e){alert("Failed to enter VR Mode: "+e.message);}
 };
@@ -145,6 +159,8 @@ function onXRFrame(t,frame){
   if(cmd!==lastCmd){send(cmd);lastCmd=cmd;}
   frame.session.requestAnimationFrame(onXRFrame);
 }
+
+}); // DOMContentLoaded
 </script>
 </body>
 </html>
