@@ -1,0 +1,17 @@
+{
+  "name": "Quest3 Telepresence Controller",
+  "short_name": "Telepresence",
+  "description": "Control Shadow Defense telepresence robots using Quest 3 thumb-ball or any web browser.",
+  "start_url": "101925.html",
+  "display": "immersive-vr",
+  "orientation": "landscape",
+  "background_color": "#000000",
+  "theme_color": "#00ff00",
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/shadowdefense/telepresence-web/main/icon512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
