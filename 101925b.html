@@ -67,7 +67,13 @@ button.active{background:#0f0;color:#000;box-shadow:0 0 15px #0f0;}
 window.addEventListener('DOMContentLoaded',()=>{
 
 /* -------- Setup -------- */
-const btns={up:up,down:down,left:left,right:right,stop:stop};
+const btns={
+  up:document.getElementById('up'),
+  down:document.getElementById('down'),
+  left:document.getElementById('left'),
+  right:document.getElementById('right'),
+  stop:document.getElementById('stop')
+};
 const thumbBtn=document.getElementById('thumbBtn'),
       lightsBtn=document.getElementById('lightsBtn'),
       testBtn=document.getElementById('testBtn'),
