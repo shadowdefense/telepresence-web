@@ -3,11 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>101925c – Quest3 Telepresence Control (Floating VR Panel)</title>
+<title>101925c – Quest3 Telepresence Control (Fixed Visible VR Panel + Title)</title>
 
 <style>
 body{background:#000;color:#0f0;font-family:monospace;text-align:center;margin:0;overflow:hidden;}
-#topbar{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 25px 0 25px;}
+#versionTag{position:fixed;top:6px;left:10px;color:#060;font-size:12px;z-index:1000;opacity:0.8;}
+#pageTitle{position:fixed;top:6px;left:0;right:0;text-align:center;
+  font-size:20px;font-weight:bold;color:#0f0;z-index:1000;opacity:0.9;}
+#topbar{display:flex;justify-content:space-between;align-items:flex-start;
+  padding:40px 25px 0 25px;} /* pushed down below title */
 .controlBlock{display:flex;flex-direction:column;align-items:center;gap:6px;}
 .controlLabel{font-size:20px;font-weight:bold;}
 .topBtn{font-size:20px;background:#111;color:#0f0;border:2px solid #0f0;border-radius:12px;
@@ -23,11 +27,14 @@ button{font-size:28px;background:#111;color:#0f0;border:2px solid #0f0;border-ra
 button.active{background:#0f0;color:#000;box-shadow:0 0 15px #0f0;}
 #log{margin-top:15px;font-size:18px;}
 #warning{color:#0f0;font-size:14px;margin-top:5px;display:none;}
-canvas#xrCanvas{position:fixed;top:0;left:0;width:100%;height:100%;display:none;}
+canvas#xrCanvas{position:fixed;top:0;left:0;width:100%;height:100%;display:none;background:black;}
 </style>
 </head>
 
 <body>
+<div id="versionTag">Ver 101925c</div>
+<div id="pageTitle">Quest3 Telepresence Control</div>
+
 <canvas id="xrCanvas"></canvas>
 
 <div id="topbar">
@@ -65,7 +72,6 @@ canvas#xrCanvas{position:fixed;top:0;left:0;width:100%;height:100%;display:none;
 
 <script>
 window.addEventListener('DOMContentLoaded',()=>{
-
 const btns={
   up:document.getElementById('up'),
   down:document.getElementById('down'),
@@ -115,7 +121,7 @@ document.addEventListener('keydown',e=>{
 });
 document.addEventListener('keyup',()=>send('stop'));
 
-/* Top bar buttons */
+/* Top Buttons */
 lightsBtn.onclick=()=>lightsBtn.classList.toggle('active');
 testBtn.onclick=()=>alert('Test button pressed');
 micBtn.onclick=()=>{const s=micBtn.classList.toggle('active');
@@ -125,7 +131,7 @@ thumbBtn.onclick=()=>{thumbEnabled=!thumbEnabled;
   thumbBtn.innerText=thumbEnabled?'Control ON':'Control OFF';
   document.getElementById('log').innerText=thumbEnabled?'Thumb Ball Enabled':'Thumb Ball Disabled';};
 
-/* -------- Gamepad Polling (works both VR and 2D) -------- */
+/* Gamepad Polling */
 function pollGamepad(){
   if(thumbEnabled){
     const pads=navigator.getGamepads();
@@ -144,7 +150,7 @@ function pollGamepad(){
 }
 pollGamepad();
 
-/* -------- VR Mode (Floating Panel) -------- */
+/* VR Mode */
 vrBtn.onclick=async()=>{
   if(!navigator.xr){alert("WebXR not supported in this browser.");return;}
   if(xrSession){await xrSession.end();return;}
@@ -168,16 +174,15 @@ function onXRFrame(t,frame){
   const session=frame.session;
   const pose=frame.getViewerPose(refSpace);
   gl.bindFramebuffer(gl.FRAMEBUFFER,session.renderState.baseLayer.framebuffer);
-  gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  gl.clearColor(0,0.1,0,1);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
 
-  // Minimal 3D panel placeholder
   if(pose){
     const w=gl.canvas.width,h=gl.canvas.height;
-    const x=Math.floor(w*0.25),y=Math.floor(h*0.25);
-    const ww=Math.floor(w*0.5),hh=Math.floor(h*0.5);
+    const cx=w/2,cy=h/2,rectW=w*0.35,rectH=h*0.25;
     gl.enable(gl.SCISSOR_TEST);
-    gl.scissor(x,y,ww,hh);
-    gl.clearColor(0,0.3,0,1);
+    gl.scissor(cx-rectW/2,cy-rectH/2,rectW,rectH);
+    gl.clearColor(0,0.8,0,1);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.disable(gl.SCISSOR_TEST);
   }
