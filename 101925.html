@@ -5,8 +5,11 @@
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="vr" content="yes">
+<meta http-equiv="origin-trial"
+content="AluaRjL2P9hp8bTlfvWmhCfyM0rXl+JoWJ2CYo3rXzVxPZ4qRdrxF3QgxCQVnKc4I2HD8TdYZzlyd9FHDZ+eiAAAABp0eyJvcmlnaW4iOiJodHRwczovL3NoYWRvd2RlZmVuc2UuZ2l0aHViLmlvOjQ0MyIsImZlYXR1cmUiOiJXZWJYUiIsImV4cGlyeSI6MTk5OTE0MTYwMH0=">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>101925 – Quest3 Telepresence Control (WebXR Thumb-Ball)</title>
+<title>101925 – Quest3 Telepresence Control (Stable XR Token)</title>
+
 <style>
 body{background:#000;color:#0f0;font-family:monospace;text-align:center;margin:0;overflow:hidden;}
 #topbar{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 25px 0 25px;}
@@ -16,9 +19,6 @@ h2{margin:0;}
 .topBtn{font-size:20px;background:#111;color:#0f0;border:2px solid #0f0;border-radius:12px;
   padding:8px 18px;min-width:100px;cursor:pointer;transition:all .15s ease;}
 .topBtn.active{background:#0f0;color:#000;box-shadow:0 0 15px #0f0;}
-#enterVR{display:none;margin:20px auto;padding:18px 40px;font-size:28px;
-  background:#0f0;color:#000;border:none;border-radius:14px;cursor:pointer;}
-#enterVR:hover{box-shadow:0 0 25px #0f0;}
 #video{width:80vw;max-width:640px;height:28vh;margin:10px auto;border:2px solid #0f0;
   border-radius:12px;overflow:hidden;}
 iframe{width:100%;height:100%;border:none;}
@@ -31,6 +31,7 @@ button.active{background:#0f0;color:#000;box-shadow:0 0 15px #0f0;}
 #warning{color:#0f0;font-size:14px;margin-top:5px;display:none;}
 </style>
 </head>
+
 <body>
 <div id="topbar">
   <div class="controlBlock"><div class="controlLabel">Thumb Ball</div>
@@ -46,9 +47,10 @@ button.active{background:#0f0;color:#000;box-shadow:0 0 15px #0f0;}
 </div>
 
 <div id="warning">Warning: people nearby can now hear you if you talk.</div>
-<button id="enterVR">Enter VR View</button>
 
-<div id="video"><iframe src="https://www.youtube.com/embed/5qap5aO4i9A" allowfullscreen></iframe></div>
+<div id="video">
+  <iframe src="https://www.youtube.com/embed/5qap5aO4i9A" allowfullscreen></iframe>
+</div>
 
 <div id="controls">
   <div></div><button id="up">↑</button><div></div>
@@ -64,17 +66,12 @@ const thumbBtn=document.getElementById('thumbBtn'),
       lightsBtn=document.getElementById('lightsBtn'),
       testBtn=document.getElementById('testBtn'),
       micBtn=document.getElementById('micBtn'),
-      warning=document.getElementById('warning'),
-      enterVR=document.getElementById('enterVR');
-let xrSession=null,stickEnabled=false,lastCmd='stop';
-
-/* ---------- Normal controls ---------- */
+      warning=document.getElementById('warning');
 function clearGlow(){Object.values(btns).forEach(b=>b.classList.remove('active'));}
 function glow(id){clearGlow();if(btns[id])btns[id].classList.add('active');}
 function send(cmd){
   glow(cmd==='forward'?'up':cmd==='backward'?'down':cmd==='left'?'left':cmd==='right'?'right':'stop');
   document.getElementById('log').innerText="Sent: "+cmd;
-  fetch('/command?dir='+cmd).catch(()=>{});
 }
 glow('stop');
 Object.keys(btns).forEach(k=>btns[k].onclick=()=>{send(k==='up'?'forward':
@@ -86,49 +83,12 @@ document.onkeydown=e=>{
   if(e.key==='d'||e.key==='ArrowRight')send('right');
 };
 document.onkeyup=()=>send('stop');
-lightsBtn.onclick=()=>{lightsBtn.classList.toggle('active');};
+lightsBtn.onclick=()=>lightsBtn.classList.toggle('active');
 testBtn.onclick=()=>alert('Test button pressed');
 micBtn.onclick=()=>{const s=micBtn.classList.toggle('active');
   micBtn.innerText=s?'Mic ON':'Mic OFF';warning.style.display=s?'block':'none';};
 thumbBtn.onclick=()=>{const s=thumbBtn.classList.toggle('active');
   thumbBtn.innerText=s?'Control ON':'Control OFF';};
-
-/* ---------- WebXR detection ---------- */
-if(navigator.xr){enterVR.style.display='block';}
-
-/* ---------- Enter / Exit VR View ---------- */
-enterVR.onclick=async()=>{
-  if(xrSession){await xrSession.end();xrSession=null;
-    enterVR.innerText='Enter VR View';document.getElementById('log').innerText='Exited VR View';
-    stickEnabled=false;return;}
-  try{
-    xrSession=await navigator.xr.requestSession('immersive-vr',{optionalFeatures:['local-floor']});
-    const glCanvas=document.createElement('canvas');glCanvas.width=1;glCanvas.height=1;
-    const gl=glCanvas.getContext('webgl',{xrCompatible:true});
-    xrSession.updateRenderState({baseLayer:new XRWebGLLayer(xrSession,gl)});
-    xrSession.requestReferenceSpace('local');
-    enterVR.innerText='Exit VR View';
-    document.getElementById('log').innerText='VR View active';
-    stickEnabled=true;
-    xrSession.requestAnimationFrame(onXRFrame);
-  }catch(e){document.getElementById('log').innerText='XR error: '+e;}
-};
-
-/* ---------- Poll thumb-ball once VR active ---------- */
-function onXRFrame(t,frame){
-  if(!xrSession)return;
-  const pads=navigator.getGamepads();
-  let cmd='stop';
-  for(const gp of pads){if(!gp)continue;
-    const x=gp.axes[0]||0,y=gp.axes[1]||0;
-    if(y<-0.4)cmd='forward';
-    else if(y>0.4)cmd='backward';
-    else if(x<-0.4)cmd='left';
-    else if(x>0.4)cmd='right';
-    break;}
-  if(cmd!==lastCmd){send(cmd);lastCmd=cmd;}
-  frame.session.requestAnimationFrame(onXRFrame);
-}
 </script>
 </body>
 </html>
