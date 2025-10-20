@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>101925c – Quest3 Telepresence Control (Title Overlay Fix)</title>
+<title>101925c-002 – Quest3 Telepresence Control (Full DOM Overlay in VR)</title>
 
 <style>
 body{background:#000;color:#0f0;font-family:monospace;text-align:center;margin:0;overflow:hidden;}
@@ -33,15 +33,12 @@ button{font-size:28px;background:#111;color:#0f0;border:2px solid #0f0;border-ra
 button.active{background:#0f0;color:#000;box-shadow:0 0 15px #0f0;}
 #log{margin-top:15px;font-size:18px;}
 #warning{color:#0f0;font-size:14px;margin-top:5px;display:none;}
-canvas#xrCanvas{position:fixed;top:0;left:0;width:100%;height:100%;display:none;background:black;}
 </style>
 </head>
 
 <body>
-<div id="versionTag">Ver 101925c</div>
+<div id="versionTag">Ver 101925c-002</div>
 <div id="pageTitle">Quest3 Telepresence Control</div>
-
-<canvas id="xrCanvas"></canvas>
 
 <div id="topbar">
   <div class="controlBlock"><div class="controlLabel">Thumb Ball</div>
@@ -90,11 +87,11 @@ const thumbBtn=document.getElementById('thumbBtn'),
       testBtn=document.getElementById('testBtn'),
       micBtn=document.getElementById('micBtn'),
       vrBtn=document.getElementById('vrBtn'),
-      warning=document.getElementById('warning'),
-      xrCanvas=document.getElementById('xrCanvas');
+      warning=document.getElementById('warning');
 
-let xrSession=null,lastCmd='stop',thumbEnabled=false,gl=null,refSpace=null;
+let xrSession=null,lastCmd='stop',thumbEnabled=false;
 
+/* Utility */
 function clearGlow(){Object.values(btns).forEach(b=>b.classList.remove('active'));}
 function glow(id){clearGlow();if(btns[id])btns[id].classList.add('active');}
 function send(cmd){
@@ -156,44 +153,38 @@ function pollGamepad(){
 }
 pollGamepad();
 
-/* VR Mode */
+/* ======== VR Mode with DOM Overlay ======== */
 vrBtn.onclick=async()=>{
   if(!navigator.xr){alert("WebXR not supported in this browser.");return;}
   if(xrSession){await xrSession.end();return;}
+
   try{
-    xrSession=await navigator.xr.requestSession('immersive-vr',{optionalFeatures:['local-floor']});
-    vrBtn.innerText="Exit VR Mode";vrBtn.classList.add('active');
-    xrCanvas.style.display='block';
-    gl=xrCanvas.getContext('webgl',{xrCompatible:true});
-    await gl.makeXRCompatible();
-    xrSession.updateRenderState({baseLayer:new XRWebGLLayer(xrSession,gl)});
-    refSpace=await xrSession.requestReferenceSpace('local-floor');
-    xrSession.requestAnimationFrame(onXRFrame);
-    xrSession.onend=()=>{xrSession=null;gl=null;refSpace=null;
-      xrCanvas.style.display='none';
-      vrBtn.innerText="Enter VR Mode";vrBtn.classList.remove('active');
+    xrSession = await navigator.xr.requestSession("immersive-vr", {
+      optionalFeatures: ["dom-overlay", "local-floor"],
+      domOverlay: { root: document.body }
+    });
+
+    vrBtn.innerText = "Exit VR Mode";
+    vrBtn.classList.add("active");
+    document.body.style.display = "block";
+    document.getElementById("log").innerText = "VR Mode Active (DOM Overlay)";
+    
+    xrSession.onend = () => {
+      vrBtn.innerText = "Enter VR Mode";
+      vrBtn.classList.remove("active");
+      document.getElementById("log").innerText = "Exited VR Mode";
     };
-  }catch(e){alert("Failed to enter VR: "+e.message);}
-};
 
-function onXRFrame(t,frame){
-  const session=frame.session;
-  const pose=frame.getViewerPose(refSpace);
-  gl.bindFramebuffer(gl.FRAMEBUFFER,session.renderState.baseLayer.framebuffer);
-  gl.clearColor(0,0.1,0,1);
-  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+    const refSpace = await xrSession.requestReferenceSpace("local-floor");
+    function loop(t, frame) {
+      xrSession.requestAnimationFrame(loop);
+    }
+    xrSession.requestAnimationFrame(loop);
 
-  if(pose){
-    const w=gl.canvas.width,h=gl.canvas.height;
-    const cx=w/2,cy=h/2,rectW=w*0.35,rectH=h*0.25;
-    gl.enable(gl.SCISSOR_TEST);
-    gl.scissor(cx-rectW/2,cy-rectH/2,rectW,rectH);
-    gl.clearColor(0,0.8,0,1);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.disable(gl.SCISSOR_TEST);
+  } catch(e) {
+    alert("Failed to enter VR mode: "+e.message);
   }
-  session.requestAnimationFrame(onXRFrame);
-}
+};
 }); // DOMContentLoaded
 </script>
 </body>
