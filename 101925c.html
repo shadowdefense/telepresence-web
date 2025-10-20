@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>101925c – Quest3 Telepresence Control (Floating VR Panel)</title>
+
+<style>
+body{background:#000;color:#0f0;font-family:monospace;text-align:center;margin:0;overflow:hidden;}
+#topbar{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 25px 0 25px;}
+.controlBlock{display:flex;flex-direction:column;align-items:center;gap:6px;}
+.controlLabel{font-size:20px;font-weight:bold;}
+.topBtn{font-size:20px;background:#111;color:#0f0;border:2px solid #0f0;border-radius:12px;
+  padding:8px 18px;min-width:100px;cursor:pointer;transition:all .15s ease;}
+.topBtn.active{background:#0f0;color:#000;box-shadow:0 0 15px #0f0;}
+#video{width:80vw;max-width:640px;height:28vh;margin:10px auto;border:2px solid #0f0;
+  border-radius:12px;overflow:hidden;}
+iframe{width:100%;height:100%;border:none;}
+#controls{display:inline-grid;grid-template-columns:80px 80px 80px;grid-template-rows:80px 80px 80px;
+  justify-content:center;align-items:center;gap:10px;margin-top:10px;}
+button{font-size:28px;background:#111;color:#0f0;border:2px solid #0f0;border-radius:50%;
+  width:80px;height:80px;transition:all .1s ease;cursor:pointer;}
+button.active{background:#0f0;color:#000;box-shadow:0 0 15px #0f0;}
+#log{margin-top:15px;font-size:18px;}
+#warning{color:#0f0;font-size:14px;margin-top:5px;display:none;}
+canvas#xrCanvas{position:fixed;top:0;left:0;width:100%;height:100%;display:none;}
+</style>
+</head>
+
+<body>
+<canvas id="xrCanvas"></canvas>
+
+<div id="topbar">
+  <div class="controlBlock"><div class="controlLabel">Thumb Ball</div>
+    <button id="thumbBtn" class="topBtn">Control OFF</button></div>
+
+  <div class="controlBlock"><div class="controlLabel">Lights</div>
+    <button id="lightsBtn" class="topBtn">ON / OFF</button></div>
+
+  <div class="controlBlock"><div class="controlLabel">VR Mode</div>
+    <button id="vrBtn" class="topBtn">Enter VR Mode</button></div>
+
+  <div class="controlBlock"><div class="controlLabel">Test</div>
+    <button id="testBtn" class="topBtn"
+     style="background:linear-gradient(145deg,#222,#000);
+     box-shadow:2px 2px 6px #050,inset -2px -2px 4px #0a0;">TEST</button></div>
+
+  <div class="controlBlock"><div class="controlLabel">Mic</div>
+    <button id="micBtn" class="topBtn">Mic OFF</button></div>
+</div>
+
+<div id="warning">Warning: people nearby can now hear you if you talk.</div>
+
+<div id="video">
+  <iframe src="https://www.youtube.com/embed/5qap5aO4i9A" allowfullscreen></iframe>
+</div>
+
+<div id="controls">
+  <div></div><button id="up">↑</button><div></div>
+  <button id="left">←</button><button id="stop">■</button><button id="right">→</button>
+  <div></div><button id="down">↓</button><div></div>
+</div>
+
+<div id="log">Waiting for input…</div>
+
+<script>
+window.addEventListener('DOMContentLoaded',()=>{
+
+const btns={
+  up:document.getElementById('up'),
+  down:document.getElementById('down'),
+  left:document.getElementById('left'),
+  right:document.getElementById('right'),
+  stop:document.getElementById('stop')
+};
+const thumbBtn=document.getElementById('thumbBtn'),
+      lightsBtn=document.getElementById('lightsBtn'),
+      testBtn=document.getElementById('testBtn'),
+      micBtn=document.getElementById('micBtn'),
+      vrBtn=document.getElementById('vrBtn'),
+      warning=document.getElementById('warning'),
+      xrCanvas=document.getElementById('xrCanvas');
+
+let xrSession=null,lastCmd='stop',thumbEnabled=false,gl=null,refSpace=null;
+
+function clearGlow(){Object.values(btns).forEach(b=>b.classList.remove('active'));}
+function glow(id){clearGlow();if(btns[id])btns[id].classList.add('active');}
+function send(cmd){
+  const map={forward:'up',backward:'down',left:'left',right:'right',stop:'stop'};
+  glow(map[cmd]||'stop');
+  document.getElementById('log').innerText="Sent: "+cmd;
+}
+glow('stop');
+
+/* Mouse & Touch */
+for(const [name,btn] of Object.entries(btns)){
+  btn.onmousedown = btn.ontouchstart = (e)=>{
+    e.preventDefault();
+    if(name==='up')send('forward');
+    else if(name==='down')send('backward');
+    else if(name==='left')send('left');
+    else if(name==='right')send('right');
+    else send('stop');
+  };
+  btn.onmouseup = btn.ontouchend = ()=>setTimeout(()=>send('stop'),50);
+}
+
+/* Keyboard */
+document.addEventListener('keydown',e=>{
+  if(e.repeat)return;
+  if(e.key==='w'||e.key==='ArrowUp')send('forward');
+  if(e.key==='s'||e.key==='ArrowDown')send('backward');
+  if(e.key==='a'||e.key==='ArrowLeft')send('left');
+  if(e.key==='d'||e.key==='ArrowRight')send('right');
+});
+document.addEventListener('keyup',()=>send('stop'));
+
+/* Top bar buttons */
+lightsBtn.onclick=()=>lightsBtn.classList.toggle('active');
+testBtn.onclick=()=>alert('Test button pressed');
+micBtn.onclick=()=>{const s=micBtn.classList.toggle('active');
+  micBtn.innerText=s?'Mic ON':'Mic OFF';warning.style.display=s?'block':'none';};
+thumbBtn.onclick=()=>{thumbEnabled=!thumbEnabled;
+  thumbBtn.classList.toggle('active',thumbEnabled);
+  thumbBtn.innerText=thumbEnabled?'Control ON':'Control OFF';
+  document.getElementById('log').innerText=thumbEnabled?'Thumb Ball Enabled':'Thumb Ball Disabled';};
+
+/* -------- Gamepad Polling (works both VR and 2D) -------- */
+function pollGamepad(){
+  if(thumbEnabled){
+    const pads=navigator.getGamepads();
+    let cmd='stop';
+    for(const gp of pads){if(!gp)continue;
+      const x=gp.axes[0]||0,y=gp.axes[1]||0;
+      if(y<-0.4)cmd='forward';
+      else if(y>0.4)cmd='backward';
+      else if(x<-0.4)cmd='left';
+      else if(x>0.4)cmd='right';
+      break;
+    }
+    if(cmd!==lastCmd){send(cmd);lastCmd=cmd;}
+  }
+  requestAnimationFrame(pollGamepad);
+}
+pollGamepad();
+
+/* -------- VR Mode (Floating Panel) -------- */
+vrBtn.onclick=async()=>{
+  if(!navigator.xr){alert("WebXR not supported in this browser.");return;}
+  if(xrSession){await xrSession.end();return;}
+  try{
+    xrSession=await navigator.xr.requestSession('immersive-vr',{optionalFeatures:['local-floor']});
+    vrBtn.innerText="Exit VR Mode";vrBtn.classList.add('active');
+    xrCanvas.style.display='block';
+    gl=xrCanvas.getContext('webgl',{xrCompatible:true});
+    await gl.makeXRCompatible();
+    xrSession.updateRenderState({baseLayer:new XRWebGLLayer(xrSession,gl)});
+    refSpace=await xrSession.requestReferenceSpace('local-floor');
+    xrSession.requestAnimationFrame(onXRFrame);
+    xrSession.onend=()=>{xrSession=null;gl=null;refSpace=null;
+      xrCanvas.style.display='none';
+      vrBtn.innerText="Enter VR Mode";vrBtn.classList.remove('active');
+    };
+  }catch(e){alert("Failed to enter VR: "+e.message);}
+};
+
+function onXRFrame(t,frame){
+  const session=frame.session;
+  const pose=frame.getViewerPose(refSpace);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,session.renderState.baseLayer.framebuffer);
+  gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+
+  // Minimal 3D panel placeholder
+  if(pose){
+    const w=gl.canvas.width,h=gl.canvas.height;
+    const x=Math.floor(w*0.25),y=Math.floor(h*0.25);
+    const ww=Math.floor(w*0.5),hh=Math.floor(h*0.5);
+    gl.enable(gl.SCISSOR_TEST);
+    gl.scissor(x,y,ww,hh);
+    gl.clearColor(0,0.3,0,1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.disable(gl.SCISSOR_TEST);
+  }
+  session.requestAnimationFrame(onXRFrame);
+}
+}); // DOMContentLoaded
+</script>
+</body>
+</html>
