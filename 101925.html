@@ -6,12 +6,11 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="vr" content="yes">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>101925 – Quest3 Telepresence Control (Final Stable VR Version)</title>
+<title>101925 – Quest3 Telepresence Control (Final Unified Input)</title>
 
 <style>
 body{background:#000;color:#0f0;font-family:monospace;text-align:center;margin:0;overflow:hidden;}
 #topbar{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 25px 0 25px;}
-h2{margin:0;}
 .controlBlock{display:flex;flex-direction:column;align-items:center;gap:6px;}
 .controlLabel{font-size:20px;font-weight:bold;}
 .topBtn{font-size:20px;background:#111;color:#0f0;border:2px solid #0f0;border-radius:12px;
@@ -23,7 +22,7 @@ iframe{width:100%;height:100%;border:none;}
 #controls{display:inline-grid;grid-template-columns:80px 80px 80px;grid-template-rows:80px 80px 80px;
   justify-content:center;align-items:center;gap:10px;margin-top:10px;}
 button{font-size:28px;background:#111;color:#0f0;border:2px solid #0f0;border-radius:50%;
-  width:80px;height:80px;transition:all .15s ease;cursor:pointer;}
+  width:80px;height:80px;transition:all .1s ease;cursor:pointer;}
 button.active{background:#0f0;color:#000;box-shadow:0 0 15px #0f0;}
 #log{margin-top:15px;font-size:18px;}
 #warning{color:#0f0;font-size:14px;margin-top:5px;display:none;}
@@ -65,7 +64,6 @@ button.active{background:#0f0;color:#000;box-shadow:0 0 15px #0f0;}
 <div id="log">Waiting for input…</div>
 
 <script>
-/* -------- Buttons & States -------- */
 const btns={up:up,down:down,left:left,right:right,stop:stop};
 const thumbBtn=document.getElementById('thumbBtn'),
       lightsBtn=document.getElementById('lightsBtn'),
@@ -79,21 +77,35 @@ let xrSession=null,lastCmd='stop';
 function clearGlow(){Object.values(btns).forEach(b=>b.classList.remove('active'));}
 function glow(id){clearGlow();if(btns[id])btns[id].classList.add('active');}
 function send(cmd){
-  glow(cmd==='forward'?'up':cmd==='backward'?'down':cmd==='left'?'left':cmd==='right'?'right':'stop');
+  const map={forward:'up',backward:'down',left:'left',right:'right',stop:'stop'};
+  glow(map[cmd]||'stop');
   document.getElementById('log').innerText="Sent: "+cmd;
 }
 
-/* -------- Normal Input Handlers -------- */
-glow('stop');
-Object.keys(btns).forEach(k=>btns[k].onclick=()=>{send(k==='up'?'forward':
-  k==='down'?'backward':k==='left'?'left':k==='right'?'right':'stop');});
-document.onkeydown=e=>{
+/* -------- Mouse & Touch Inputs -------- */
+for(const [name,btn] of Object.entries(btns)){
+  btn.onmousedown=btn.ontouchstart=()=>{btn.classList.add('active');
+    if(name==='up')send('forward');
+    else if(name==='down')send('backward');
+    else if(name==='left')send('left');
+    else if(name==='right')send('right');
+    else send('stop');
+  };
+  btn.onmouseup=btn.ontouchend=()=>{send('stop');};
+}
+
+/* -------- Keyboard Inputs -------- */
+document.addEventListener('keydown',e=>{
+  if(e.repeat)return;
   if(e.key==='w'||e.key==='ArrowUp')send('forward');
   if(e.key==='s'||e.key==='ArrowDown')send('backward');
   if(e.key==='a'||e.key==='ArrowLeft')send('left');
   if(e.key==='d'||e.key==='ArrowRight')send('right');
-};
-document.onkeyup=()=>send('stop');
+});
+document.addEventListener('keyup',()=>send('stop'));
+glow('stop');
+
+/* -------- Top Buttons -------- */
 lightsBtn.onclick=()=>lightsBtn.classList.toggle('active');
 testBtn.onclick=()=>alert('Test button pressed');
 micBtn.onclick=()=>{const s=micBtn.classList.toggle('active');
@@ -101,7 +113,7 @@ micBtn.onclick=()=>{const s=micBtn.classList.toggle('active');
 thumbBtn.onclick=()=>{const s=thumbBtn.classList.toggle('active');
   thumbBtn.innerText=s?'Control ON':'Control OFF';};
 
-/* -------- VR Mode Setup -------- */
+/* -------- VR Mode -------- */
 vrBtn.onclick=async()=>{
   if(!navigator.xr){alert("WebXR not supported in this browser.");return;}
   if(xrSession){
@@ -118,7 +130,7 @@ vrBtn.onclick=async()=>{
   }catch(e){alert("Failed to enter VR Mode: "+e.message);}
 };
 
-/* -------- Thumb Ball Polling in VR -------- */
+/* -------- Thumb Ball / Gamepad Polling -------- */
 function onXRFrame(t,frame){
   if(!xrSession)return;
   const pads=navigator.getGamepads();
