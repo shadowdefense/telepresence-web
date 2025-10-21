@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>101925d-003 – Quest3 Telepresence VR Board (Voice Command Integrated)</title>
+<style>
+body{
+  margin:0;
+  overflow:hidden;
+  background:#000;
+  color:#0f0;
+  font-family:monospace;
+}
+#versionTag{
+  position:fixed;
+  top:6px;
+  left:10px;
+  font-size:14px;
+}
+.topbar{
+  position:fixed;
+  top:6px;
+  right:10px;
+  display:flex;
+  gap:8px;
+}
+button{
+  background:#111;
+  border:1px solid #0f0;
+  color:#0f0;
+  border-radius:6px;
+  padding:6px 10px;
+  cursor:pointer;
+  font-family:monospace;
+}
+button.active{
+  background:#0f0;
+  color:#000;
+}
+#loading{
+  position:fixed;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#000;
+  color:#0f0;
+  font-size:24px;
+  z-index:100;
+}
+#liveFeed{
+  position:absolute;
+  top:50px;
+  left:50%;
+  transform:translateX(-50%);
+  width:480px;
+  height:270px;
+  background:#111;
+  border:2px solid #0f0;
+  border-radius:10px;
+}
+.controls{
+  position:absolute;
+  bottom:50px;
+  left:50%;
+  transform:translateX(-50%);
+  display:grid;
+  grid-template-columns:80px 80px 80px;
+  grid-template-rows:80px 80px 80px;
+  gap:10px;
+}
+.arrow{
+  border:2px solid #0f0;
+  color:#0f0;
+  background:#000;
+  border-radius:10px;
+  font-size:24px;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  cursor:pointer;
+  transition:background .2s,color .2s;
+}
+.arrow.active{background:#0f0;color:#000;}
+.arrow.stop{background:#0f0;color:#000;}
+#forward{grid-column:2;grid-row:1;}
+#left{grid-column:1;grid-row:2;}
+#stop{grid-column:2;grid-row:2;}
+#right{grid-column:3;grid-row:2;}
+#backward{grid-column:2;grid-row:3;}
+</style>
+</head>
+<body>
+<div id="loading">Loading...</div>
+<div id="versionTag">Version: 101925d-003</div>
+<div class="topbar">
+  <button id="thumbBtn">Turn Thumbball On</button>
+  <button id="vrBtn">Checking VR...</button>
+  <button id="voiceBtn">Voice Commands: OFF</button>
+</div>
+
+<video id="liveFeed" autoplay muted playsinline></video>
+
+<div class="controls">
+  <div class="arrow" id="forward">▲</div>
+  <div class="arrow" id="left">◄</div>
+  <div class="arrow stop" id="stop">■</div>
+  <div class="arrow" id="right">►</div>
+  <div class="arrow" id="backward">▼</div>
+</div>
+
+<script>
+// ===== Initial setup =====
+window.addEventListener("load",()=>{document.getElementById("loading").style.display="none";});
+
+// ===== VR button detection =====
+const vrBtn=document.getElementById("vrBtn");
+if(navigator.xr){
+  vrBtn.textContent="Enter VR";
+}else{
+  vrBtn.textContent="VR Not Supported";
+  vrBtn.disabled=true;
+}
+
+// ===== Arrow control logic =====
+const arrows={
+  forward:document.getElementById("forward"),
+  backward:document.getElementById("backward"),
+  left:document.getElementById("left"),
+  right:document.getElementById("right"),
+  stop:document.getElementById("stop")
+};
+function activateArrow(dir){
+  Object.values(arrows).forEach(a=>a.classList.remove("active","stop"));
+  arrows[dir].classList.add("active");
+}
+function stopAll(){
+  Object.values(arrows).forEach(a=>a.classList.remove("active"));
+  arrows.stop.classList.add("stop");
+}
+stopAll();
+function drive(dir){
+  activateArrow(dir);
+  console.log("Driving "+dir);
+  setTimeout(()=>{stopAll();console.log("Stopped");},1000);
+}
+for(const [dir,el] of Object.entries(arrows)){
+  el.addEventListener("click",()=>{dir==="stop"?stopAll():drive(dir);});
+}
+
+// ===== LoFi livestream (placeholder) =====
+// Replace src with your real camera stream when ready
+const live=document.getElementById("liveFeed");
+live.src="https://cdn.coverr.co/videos/coverr-lofi-study-7134/1080p.mp4"; // temporary demo
+live.loop=true;
+live.play();
+
+// ===== Voice command integration =====
+const voiceBtn=document.getElementById("voiceBtn");
+let listening=false;
+let recognition;
+
+if("webkitSpeechRecognition" in window){
+  recognition=new webkitSpeechRecognition();
+  recognition.continuous=true;
+  recognition.interimResults=false;
+  recognition.lang="en-US";
+
+  recognition.onresult=function(e){
+    const txt=e.results[e.results.length-1][0].transcript.toLowerCase().trim();
+    console.log("Heard:",txt);
+    if(txt.match(/\b(forward|go\sforward|drive\sforward|move\sforward|ahead)\b/)) drive("forward");
+    else if(txt.match(/\b(back|backward|go\sback|drive\sback|reverse)\b/)) drive("backward");
+    else if(txt.match(/\b(left|turn\sleft|go\sleft|move\sleft)\b/)) drive("left");
+    else if(txt.match(/\b(right|turn\sright|go\sright|move\sright)\b/)) drive("right");
+  };
+
+  recognition.onerror=e=>{console.warn("Speech error:",e.error);};
+  recognition.onend=()=>{if(listening) recognition.start();};
+
+}else{
+  voiceBtn.disabled=true;
+  voiceBtn.textContent="Voice Not Supported";
+}
+
+voiceBtn.addEventListener("click",()=>{
+  if(!recognition) return;
+  listening=!listening;
+  if(listening){
+    voiceBtn.classList.add("active");
+    voiceBtn.textContent="Voice Commands: ON";
+    recognition.start();
+  }else{
+    voiceBtn.classList.remove("active");
+    voiceBtn.textContent="Voice Commands: OFF";
+    recognition.stop();
+  }
+});
+</script>
+</body>
+</html>
