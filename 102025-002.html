@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>102025-002 – Quest3 Telepresence VR Board (Thumbstick + Voice + Meter)</title>
+<style>
+body{margin:0;overflow:hidden;background:#000;color:#0f0;font-family:monospace;}
+#versionTag{position:fixed;top:6px;left:10px;font-size:14px;}
+.topbar{position:fixed;top:6px;left:50%;transform:translateX(-50%);display:flex;gap:10px;}
+button{background:#111;border:1px solid #0f0;color:#0f0;border-radius:6px;padding:6px 14px;cursor:pointer;font-family:monospace;font-size:14px;}
+button.active{background:#0f0;color:#000;}
+#container{position:absolute;top:60px;left:50%;transform:translateX(-50%);display:flex;gap:20px;}
+#speechHistory{width:220px;height:400px;max-height:520px;border:2px solid #0f0;border-radius:8px;background:#010;overflow-y:auto;padding:6px;font-size:13px;}
+#speechHistory p{margin:2px 0;}
+#videoColumn{display:flex;flex-direction:column;align-items:center;}
+#liveFeed{width:480px;height:270px;background:#111;border:2px solid #0f0;border-radius:10px;}
+#meterCanvas{width:480px;height:80px;border:1px solid #0f0;border-radius:4px;margin-top:5px;}
+#speechBox{width:480px;height:35px;border:1px solid #0f0;border-radius:4px;background:#010;text-align:left;padding:5px;overflow:hidden;font-size:14px;margin-top:5px;}
+.controls{margin-top:15px;display:grid;grid-template-columns:100px 100px 100px;grid-template-rows:100px 100px 100px;gap:15px;}
+.arrow{border:2px solid #0f0;color:#0f0;background:#000;border-radius:10px;font-size:32px;display:flex;justify-content:center;align-items:center;cursor:pointer;transition:background .2s,color .2s;}
+.arrow.active{background:#0f0;color:#000;}
+.arrow.stop{background:#0f0;color:#000;}
+#forward{grid-column:2;grid-row:1;}
+#left{grid-column:1;grid-row:2;}
+#stop{grid-column:2;grid-row:2;}
+#right{grid-column:3;grid-row:2;}
+#backward{grid-column:2;grid-row:3;}
+</style>
+</head>
+<body>
+<div id="versionTag">Version 102025-002</div>
+
+<div class="topbar">
+  <button id="thumbBtn">Turn Thumbball On</button>
+  <button id="vrBtn">Checking VR...</button>
+  <button id="voiceBtn">Voice Commands: OFF</button>
+</div>
+
+<div id="container">
+  <div id="speechHistory"></div>
+  <div id="videoColumn">
+    <video id="liveFeed" autoplay muted playsinline></video>
+    <canvas id="meterCanvas"></canvas>
+    <div id="speechBox">Heard: (nothing yet)</div>
+    <div class="controls">
+      <div class="arrow" id="forward">▲</div>
+      <div class="arrow" id="left">◄</div>
+      <div class="arrow stop" id="stop">■</div>
+      <div class="arrow" id="right">►</div>
+      <div class="arrow" id="backward">▼</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// VR button setup
+const vrBtn=document.getElementById("vrBtn");
+if(navigator.xr){vrBtn.textContent="Enter VR";}else{vrBtn.textContent="VR Not Supported";vrBtn.disabled=true;}
+
+// arrow setup
+const arrows={forward:null,backward:null,left:null,right:null,stop:null};
+for(let k in arrows){arrows[k]=document.getElementById(k);}
+function activateArrow(d){Object.values(arrows).forEach(a=>a.classList.remove("active","stop"));arrows[d].classList.add("active");}
+function stopAll(){Object.values(arrows).forEach(a=>a.classList.remove("active"));arrows.stop.classList.add("stop");}
+stopAll();
+function drive(d){activateArrow(d);setTimeout(stopAll,1000);}
+Object.entries(arrows).forEach(([d,e])=>e.addEventListener("click",()=>{d==="stop"?stopAll():drive(d);}))
+
+// video placeholder
+const live=document.getElementById("liveFeed");
+live.src="https://cdn.coverr.co/videos/coverr-lofi-study-7134/1080p.mp4";
+live.loop=true;live.play();
+
+// audio meter
+const meterCanvas=document.getElementById("meterCanvas");const ctx=meterCanvas.getContext("2d");
+let audioCtx,analyser,dataArray,bufferLength;
+function startMeter(stream){
+  if(audioCtx)return;
+  audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  const src=audioCtx.createMediaStreamSource(stream);
+  analyser=audioCtx.createAnalyser();
+  analyser.fftSize=512;
+  bufferLength=analyser.frequencyBinCount;
+  dataArray=new Uint8Array(bufferLength);
+  src.connect(analyser);
+  drawMeter();
+}
+function drawMeter(){
+  requestAnimationFrame(drawMeter);
+  if(!analyser)return;
+  analyser.getByteFrequencyData(dataArray);
+  ctx.clearRect(0,0,meterCanvas.width,meterCanvas.height);
+  const bars=64;
+  const w=meterCanvas.width/bars;
+  for(let i=0;i<bars;i++){
+    const idx=Math.floor(i*bufferLength/bars);
+    let val=dataArray[idx];
+    let h=(val/255)*meterCanvas.height;
+    const hue=100+(i/bars)*80;
+    ctx.fillStyle=`hsl(${hue},100%,40%)`;
+    ctx.fillRect(i*w,meterCanvas.height-h,w-1,h);
+  }
+}
+
+// speech recognition
+const voiceBtn=document.getElementById("voiceBtn");
+const speechBox=document.getElementById("speechBox");
+const speechHistory=document.getElementById("speechHistory");
+let listening=false,recognition,cooldown=false;
+if("webkitSpeechRecognition"in window){
+  recognition=new webkitSpeechRecognition();
+  recognition.continuous=true;recognition.interimResults=false;recognition.lang="en-US";
+  recognition.onresult=e=>{
+    const raw=e.results[e.results.length-1][0].transcript.toLowerCase().trim();
+    const txt=raw.replace(/[.,!?]/g,"");
+    if(!txt)return;
+    speechBox.textContent="Heard: "+txt;
+    const p=document.createElement("p");p.textContent=txt;speechHistory.appendChild(p);
+    speechHistory.scrollTop=speechHistory.scrollHeight;
+    if(cooldown)return;
+    cooldown=true;setTimeout(()=>cooldown=false,500);
+    if(txt.includes("forward"))drive("forward");
+    else if(txt.includes("back"))drive("backward");
+    else if(txt.includes("left"))drive("left");
+    else if(txt.includes("right"))drive("right");
+    recognition.stop();setTimeout(()=>{if(listening)recognition.start();},200);
+  };
+  recognition.onend=()=>{if(listening)recognition.start();}
+}else{
+  voiceBtn.disabled=true;voiceBtn.textContent="Voice Not Supported";
+}
+voiceBtn.addEventListener("click",async()=>{
+  if(!recognition)return;
+  listening=!listening;
+  if(listening){
+    voiceBtn.classList.add("active");
+    voiceBtn.textContent="Voice Commands: ON";
+    const s=await navigator.mediaDevices.getUserMedia({audio:true});
+    startMeter(s);
+    recognition.start();
+  }else{
+    voiceBtn.classList.remove("active");
+    voiceBtn.textContent="Voice Commands: OFF";
+    recognition.stop();
+  }
+});
+
+// thumbstick / gamepad support
+const thumbBtn=document.getElementById("thumbBtn");
+let thumbActive=false,gamepadIndex=null;
+thumbBtn.addEventListener("click",()=>{
+  thumbActive=!thumbActive;
+  thumbBtn.classList.toggle("active",thumbActive);
+  thumbBtn.textContent=thumbActive?"Thumbball: ON":"Turn Thumbball On";
+  if(thumbActive){pollGamepad();}else{gamepadIndex=null;}
+});
+window.addEventListener("gamepadconnected",e=>{
+  if(gamepadIndex===null){gamepadIndex=e.gamepad.index;}
+});
+window.addEventListener("gamepaddisconnected",e=>{
+  if(e.gamepad.index===gamepadIndex){gamepadIndex=null;}
+});
+function pollGamepad(){
+  if(!thumbActive)return;
+  const gps=navigator.getGamepads();
+  const gp=gamepadIndex!==null?gps[gamepadIndex]:gps.find(g=>g);
+  if(gp){
+    const x=gp.axes[0],y=gp.axes[1];
+    if(Math.abs(x)<0.2&&Math.abs(y)<0.2){stopAll();}
+    else if(y<-0.5)drive("forward");
+    else if(y>0.5)drive("backward");
+    else if(x<-0.5)drive("left");
+    else if(x>0.5)drive("right");
+  }
+  requestAnimationFrame(pollGamepad);
+}
+</script>
+</body>
+</html>
